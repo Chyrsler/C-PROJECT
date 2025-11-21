@@ -1,26 +1,17 @@
 #include <stdio.h>
+#include <stdlib.h>
 
-char map[20][21] = {
-    "||||||||||||||||||||",
-    "|1****|******#*****|",
-    "|*|||||*|||||*|||**|",
-    "|*|**#***|***|*#|**|",
-    "|*|*||||*|*#*|*|*|*|",
-    "|***||***|*|||*|*|*|",
-    "||*|||*#*|*|||***|*|",
-    "|****#****|***|||*|",
-    "|*|||||||*|||*|2*#|",
-    "|*|*****|***|*|***|",
-    "|*|*|||*|*|*|*|||*|",
-    "|***|*|***|*|***|*|",
-    "|*|||*|*|||*|*|||*|",
-    "|*#***|***#***|***|",
-    "|||||*|||||*|||||*|",
-    "|*****#******#****|",
-    "|*|||||||*|||||||*|",
-    "|*#******|***#****|",
-    "|*|||*|||*|||*|||*|",
-    "||||||||||||||||||||"
+char map[10][11] = {
+    "||||||||||",
+    "|1***#***|",
+    "||*||||*||",
+    "|*#***#*2|",
+    "|*|||||*|",
+    "|***#***|",
+    "||*|||*||",
+    "|***#***|",
+    "|*|||||*|",
+    "||||||||||"
 };
 
 void checkSurroundings(int x, int y) {
@@ -28,21 +19,21 @@ void checkSurroundings(int x, int y) {
     
     //ini ntar bs diganti buat narasi 
     if (map[x-1][y] != '|')
-        printf("Go above\n");
+        printf("> Go north (w)\n");
 
     if (map[x+1][y] != '|')
-        printf("Go below\n");
+        printf("> Go south (s)\n");
 
     if (map[x][y-1] != '|')
-        printf("Go left\n");
+        printf("> Go west (a)\n");
 
     if (map[x][y+1] != '|')
-        printf("Go right\n");
+        printf("> Go east (d)\n");
 }
 
 void coordinates(int *playerX, int *playerY, int *enemyX, int *enemyY) {
-    for (int i = 0; i < 20; i++) {
-        for (int j = 0; j < 20; j++) {
+    for (int i = 0; i < 10; i++) {
+        for (int j = 0; j < 10; j++) {
             if (map[i][j] == '1') {
                 *playerX = i;
                 *playerY = j;
@@ -67,7 +58,7 @@ int countOpenPaths(int x, int y) {
     return count;
 }
 
-void movePlayer(int *x, int *y, char dir) {
+void movePlayer(int *x, int *y, int enemyX, int enemyY, char dir) {
     int dx = 0, dy = 0;
 
     if (dir == 'w') dx = -1;
@@ -75,57 +66,137 @@ void movePlayer(int *x, int *y, char dir) {
     if (dir == 'a') dy = -1;
     if (dir == 'd') dy = +1;
 
-    //cek klo arah gerak kena tembok atw g
+    // cek tembok
     if (map[*x + dx][*y + dy] == '|') {
         printf("You bump into a wall. Can't move there.\n");
         return;
     }
-
+    
     *x += dx;
     *y += dy;
 
-    //gerak sampe ada tembok/opsi jalan lain
-    while (1) {
-        int openPaths = countOpenPaths(*x, *y);
-
-        //klo ada lbh dr satu, berhenti
-        if (openPaths > 2) {
-            printf("You reach a junction and stop.\n");
-            break;
-        }
-        
-        //cm ada satu jalan balik
-        if (openPaths <= 1) {
-            printf("You reach a dead end.\n");
-            break;
-        }
-
-        // jalan terus sampe ada tembok
-        if (map[*x + dx][*y + dy] != '|') {
-            *x += dx;
-            *y += dy;
-        } else {
-            //kena tembok
-            break;
-        }
+    // cek collision sm musuh
+    if (*x == enemyX && *y == enemyY) {
+        printf("YOU LOSE.\n");
+        exit(0);
     }
-
 }
 
-void showMap(int playerX, int playerY) {
+void showMap(int playerX, int playerY, int enemyX, int enemyY) {
     //cuma debugging aja
     printf("\n\n");
 
-    for (int i = 0; i < 20; i++) {
-        for (int j = 0; j < 20; j++) {
+    for (int i = 0; i < 10; i++) {
+        for (int j = 0; j < 10; j++) {
             if (i == playerX && j == playerY)
-                printf("P"); //posisi player
+                printf("P");      // Player
+            else if (i == enemyX && j == enemyY)
+                printf("J");      // Enemy
             else
-                printf("%c", map[i][j]);
+                printf("%c", map[i][j]);  // Normal map tile
         }
         printf("\n");
     }
     printf("\n\n");
+}
+
+int playerInSight(int enemyX, int enemyY, int playerX, int playerY) {
+    // kalo bener, return 1 (artinya bakal msk chase mode buat musuh)
+    // baris yang sama
+    if (enemyX == playerX) {
+        int start = enemyY < playerY ? enemyY + 1 : playerY + 1;
+        int end   = enemyY < playerY ? playerY - 1 : enemyY - 1;
+        for (int y = start; y <= end; y++)
+            if (map[enemyX][y] == '|') return 0; // blocked
+        return 1;
+    }
+
+    // kolum yang sama
+    if (enemyY == playerY) {
+        int start = enemyX < playerX ? enemyX + 1 : playerX + 1;
+        int end   = enemyX < playerX ? playerX - 1 : enemyX - 1;
+        for (int x = start; x <= end; x++)
+            if (map[x][enemyY] == '|') return 0; // blocked
+        return 1;
+    }
+
+    return 0;
+}
+
+void enemyRandomMove(int *ex, int *ey) {
+    //klo bkn chase mode, musuh bakal gerak random
+    int dirs[4][2] = {{-1,0},{1,0},{0,-1},{0,1}};
+    int valid[4];
+    int count = 0;
+
+    for (int i = 0; i < 4; i++) {
+        int nx = *ex + dirs[i][0];
+        int ny = *ey + dirs[i][1];
+        if (map[nx][ny] == '*' || map[nx][ny] == '#') {
+            valid[count++] = i;
+        }
+    }
+
+    if (count == 0) return;
+    int pick = valid[rand() % count];
+    
+    *ex += dirs[pick][0];
+    *ey += dirs[pick][1];
+}
+
+void enemyChaseMove(int *ex, int *ey, int px, int py) {
+    int dx = 0, dy = 0;
+
+    if (px < *ex) dx = -1;
+    else if (px > *ex) dx = 1;
+
+    if (py < *ey) dy = -1;
+    else if (py > *ey) dy = 1;
+
+    if (dx != 0 && (map[*ex + dx][*ey] == '*' || map[*ex + dx][*ey] == '#')) {
+        *ex += dx;
+        return;
+    }
+
+    if (dy != 0 && (map[*ex][*ey + dy] == '*' || map[*ex][*ey + dy] == '#')) {
+        *ey += dy;
+        return;
+    }
+}
+
+void warnDirection(int enemyX, int enemyY, int playerX, int playerY) {
+    int dx = enemyX - playerX;
+    int dy = enemyY - playerY;
+    printf("You sense danger ");
+
+    if (dx > 0) printf("from the south");
+    else if (dx < 0) printf("from the north");
+
+    if (dy > 0) printf("%sfrom the east", (dx != 0 ? " and " : ""));
+    else if (dy < 0) printf("%sfrom the west", (dx != 0 ? " and " : ""));
+    printf(".\n");
+}
+
+
+void enemyTurn(int *enemyX, int *enemyY, int playerX, int playerY) {
+    int chasing = playerInSight(*enemyX, *enemyY, playerX, playerY);
+
+    if (chasing) {
+        enemyChaseMove(enemyX, enemyY, playerX, playerY);
+    } else {
+        enemyRandomMove(enemyX, enemyY);
+    }
+    
+    int dist = abs(*enemyX - playerX) + abs(*enemyY - playerY);
+        
+    if (dist <= 2) {
+        warnDirection(*enemyX, *enemyY, playerX, playerY);
+    }
+    
+    if (*enemyX == playerX && *enemyY == playerY) {
+        printf("YOU LOSE.\n");
+        exit(0);
+    }
 }
 
 int main() {
@@ -134,16 +205,15 @@ int main() {
 
     coordinates(&playerX, &playerY, &enemyX, &enemyY);
 
-    printf("Player coordinates: %d, %d\n", playerX, playerY); //cek koordinat player bener g
-
     while (1) {
-        showMap(playerX, playerY);
+        showMap(playerX, playerY, enemyX, enemyY);
         checkSurroundings(playerX, playerY);
 
         printf("Move (w/a/s/d): ");
         char move;
         scanf(" %c", &move);
 
-        movePlayer(&playerX, &playerY, move);
+        movePlayer(&playerX, &playerY, enemyX, enemyY, move);
+        enemyTurn(&enemyX, &enemyY, playerX, playerY);
     }
 }
